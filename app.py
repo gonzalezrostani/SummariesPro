@@ -35,10 +35,11 @@ SHEETS_ID = st.secrets.get("SHEETS_ID", None)
 if GCP_SERVICE_ACCOUNT_JSON and SHEETS_ID:
     try:
         GCP_SA_INFO = json.loads(GCP_SERVICE_ACCOUNT_JSON)
-    except:
+    except Exception:
         GCP_SA_INFO = None
 else:
     GCP_SA_INFO = None
+
 
 @st.cache_resource(show_spinner=False)
 def get_master_sheet(gcp_info, sheet_id):
@@ -52,8 +53,9 @@ def get_master_sheet(gcp_info, sheet_id):
         client_gs = gspread.authorize(creds)
         sh = client_gs.open_by_key(sheet_id)
         return sh.sheet1
-    except:
+    except Exception:
         return None
+
 
 MASTER_SHEET = get_master_sheet(GCP_SA_INFO, SHEETS_ID)
 
@@ -68,8 +70,6 @@ if "source_text" not in st.session_state:
     st.session_state.source_text = ""
 if "start_timestamp" not in st.session_state:
     st.session_state.start_timestamp = None
-if "just_finished" not in st.session_state:
-    st.session_state.just_finished = False
 
 # Generation parameters
 temperature = 0.4
@@ -159,7 +159,7 @@ def respond(user_text, temperature, max_tokens):
     return reply
 
 
-# ---- Logging: one row per *current* state (after each round) ----
+# ---- Logging: always keep ONE row per conversation_id ----
 def save_full_conversation():
     turns = st.session_state.turns
     user_turns = [t["content"] for t in turns if t["role"] == "user"]
@@ -177,27 +177,51 @@ def save_full_conversation():
         "system_r3": sys_turns[2] if len(sys_turns) > 2 else "",
     }
 
-    # Google Sheets (silent)
+    row_values = [
+        row["start_timestamp"],
+        row["end_timestamp"],
+        row["conversation_id"],
+        row["user_r1"],
+        row["system_r1"],
+        row["user_r2"],
+        row["system_r2"],
+        row["user_r3"],
+        row["system_r3"],
+    ]
+
+    # --- 1) Google Sheets: update existing row for this conversation, else append ---
     if MASTER_SHEET is not None:
         try:
-            MASTER_SHEET.append_row([
-                row["start_timestamp"],
-                row["end_timestamp"],
-                row["conversation_id"],
-                row["user_r1"],
-                row["system_r1"],
-                row["user_r2"],
-                row["system_r2"],
-                row["user_r3"],
-                row["system_r3"],
-            ])
-        except:
+            # conversation_id is in column 3 (C)
+            conv_ids = MASTER_SHEET.col_values(3)  # 1-based index
+            row_idx = None
+            # Skip header (row 1), search from row 2
+            for idx, val in enumerate(conv_ids[1:], start=2):
+                if val == row["conversation_id"]:
+                    row_idx = idx
+                    break
+
+            if row_idx:
+                # Update row A..I for this index
+                MASTER_SHEET.update(f"A{row_idx}:I{row_idx}", [row_values])
+            else:
+                MASTER_SHEET.append_row(row_values)
+        except Exception:
             pass
 
-    # Local CSV (silent)
+    # --- 2) Local CSV: rewrite file without old conv_id, then add new row ---
     csv_path = APP_DIR / "summary_logs.csv"
-    header = not csv_path.exists()
-    pd.DataFrame([row]).to_csv(csv_path, mode="a", index=False, header=header)
+    if csv_path.exists():
+        try:
+            df_old = pd.read_csv(csv_path)
+            df_old = df_old[df_old["conversation_id"] != row["conversation_id"]]
+        except Exception:
+            df_old = pd.DataFrame()
+    else:
+        df_old = pd.DataFrame()
+
+    df_new = pd.concat([df_old, pd.DataFrame([row])], ignore_index=True)
+    df_new.to_csv(csv_path, index=False)
 
 
 def log_event(role, content):
@@ -231,15 +255,13 @@ else:
 
 # Handle new message
 if user_text:
-    st.session_state.just_finished = False
     log_event("user", user_text)
-
     reply = respond(user_text, temperature, max_tokens)
     log_event("assistant", reply)
 
     st.session_state.rounds_done += 1
 
-    # 🔁 Save after *every* round (1, 2, or 3)
+    # Save after every round, overwriting previous row for this conversation_id
     save_full_conversation()
 
     st.rerun()
