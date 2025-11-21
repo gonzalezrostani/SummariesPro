@@ -53,15 +53,18 @@ if "gcp_service_account" in st.secrets:
 else:
     GCP_SA_INFO = None
 
-# Read SHEETS_ID from root OR from inside gcp_service_account
-SHEETS_ID = None
+# Hardcoded default SHEETS_ID (your master log sheet)
+DEFAULT_SHEETS_ID = "1YaEF74iGERx78rwjSS_VtU8iLY4Dfa17do36tzTDX_Q"
+
+# Try to read SHEETS_ID from root or inside gcp_service_account, else use default
+SHEETS_ID = DEFAULT_SHEETS_ID
 if "SHEETS_ID" in st.secrets:
     SHEETS_ID = st.secrets["SHEETS_ID"]
 elif GCP_SA_INFO and "SHEETS_ID" in GCP_SA_INFO:
     SHEETS_ID = GCP_SA_INFO["SHEETS_ID"]
 
 st.sidebar.write("Has gcp_service_account:", GCP_SA_INFO is not None)
-st.sidebar.write("Has SHEETS_ID (effective):", SHEETS_ID is not None)
+st.sidebar.write("Effective SHEETS_ID:", SHEETS_ID)
 
 @st.cache_resource(show_spinner=False)
 def get_master_sheet(gcp_info, sheet_id):
@@ -164,10 +167,10 @@ def respond(user_text, temperature, max_tokens):
 
     system_with_round = (
         SYSTEM_INSTRUCTIONS
-        + f"\nCURRENT_ROUND: {current_round} of 3"
-        + "\n\nSOURCE_TEXT:\n" + source_text[:8000]
-        + "\n\nPREVIOUS_SUMMARY_IF_ANY:\n" + previous_summary[:4000]
-        + "\n\nUSER_FEEDBACK_THIS_ROUND:\n" + feedback[:3000]
+        + f"\\nCURRENT_ROUND: {current_round} of 3"
+        + "\\n\\nSOURCE_TEXT:\\n" + source_text[:8000]
+        + "\\n\\nPREVIOUS_SUMMARY_IF_ANY:\\n" + previous_summary[:4000]
+        + "\\n\\nUSER_FEEDBACK_THIS_ROUND:\\n" + feedback[:3000]
     )
 
     messages = [{"role": "system", "content": system_with_round}]
