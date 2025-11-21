@@ -23,6 +23,17 @@ if not OPENAI_API_KEY:
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
+# --- Quick auth sanity check (runs once per app startup) ---
+try:
+    client.models.list()
+except Exception as e:
+    st.error(
+        "OpenAI authentication failed. "
+        "Please check that your API key in Streamlit Secrets is valid and active. "
+        f"Details: {e}"
+    )
+    st.stop()
+
 # ---- Session state ----
 if "conv_id" not in st.session_state:
     st.session_state.conv_id = str(uuid.uuid4())
@@ -114,7 +125,7 @@ def respond(user_text, temperature, max_tokens):
     )
     messages.append({"role": "user", "content": user_message_content})
 
-    # Use Chat Completions for stability
+    # Use Chat Completions (not Responses)
     r = client.chat.completions.create(
         model=MODEL,
         messages=messages,
