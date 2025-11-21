@@ -5,9 +5,6 @@ import streamlit as st
 from openai import OpenAI
 from pathlib import Path
 
-import gspread
-from google.oauth2.service_account import Credentials
-
 # --- Basic setup ---
 APP_DIR = Path(".")
 
@@ -36,29 +33,6 @@ except Exception as e:
         f"Details: {e}"
     )
     st.stop()
-
-# --- Google Sheets config for master log ---
-GCP_SA_INFO = st.secrets.get("gcp_service_account", None)
-SHEETS_ID = st.secrets.get("SHEETS_ID", None)
-
-def get_master_sheet():
-    if not GCP_SA_INFO or not SHEETS_ID:
-        return None
-    try:
-        scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-        creds = Credentials.from_service_account_info(GCP_SA_INFO, scopes=scopes)
-        gs_client = gspread.authorize(creds)
-        # Use the first sheet (Sheet1) – change if you want a specific sheet
-        sh = gs_client.open_by_key(SHEETS_ID)
-        ws = sh.sheet1
-        return ws
-    except Exception as e:
-        st.warning(f"Could not connect to Google Sheets for logging: {e}")
-        return None
-
-MASTER_SHEET = get_master_sheet()
-if MASTER_SHEET is None:
-    st.info("Google Sheets master log not configured; falling back to local CSV only.")
 
 # ---- Session state ----
 if "conv_id" not in st.session_state:
@@ -197,24 +171,6 @@ def save_full_conversation():
         "system_r3": system_r3,
     }
 
-    # --- 1) Append to Google Sheets master log (if available) ---
-    if MASTER_SHEET is not None:
-        try:
-            MASTER_SHEET.append_row([
-                row["start_timestamp"],
-                row["end_timestamp"],
-                row["conversation_id"],
-                row["user_r1"],
-                row["system_r1"],
-                row["user_r2"],
-                row["system_r2"],
-                row["user_r3"],
-                row["system_r3"],
-            ])
-        except Exception as e:
-            st.warning(f"Failed to append to Google Sheets master log: {e}")
-
-    # --- 2) Append to local CSV as backup (ephemeral on Streamlit Cloud) ---
     csv_path = APP_DIR / "summary_logs.csv"
     header = not csv_path.exists()
     df = pd.DataFrame([row])
