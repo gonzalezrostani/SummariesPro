@@ -180,7 +180,7 @@ def respond(user_text, temperature, max_tokens):
     )
     messages.append({"role": "user", "content": user_message_content})
 
-    # Use Chat Completions (not Responses)
+    # Use Chat Completions
     r = client.chat.completions.create(
         model=MODEL,
         messages=messages,
