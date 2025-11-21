@@ -70,8 +70,6 @@ if "start_timestamp" not in st.session_state:
     st.session_state.start_timestamp = None
 if "just_finished" not in st.session_state:
     st.session_state.just_finished = False
-if "last_master_log_status" not in st.session_state:
-    st.session_state.last_master_log_status = None
 
 # Generation parameters
 temperature = 0.4
@@ -161,7 +159,7 @@ def respond(user_text, temperature, max_tokens):
     return reply
 
 
-# ---- Logging (silent) ----
+# ---- Logging: one row per *current* state (after each round) ----
 def save_full_conversation():
     turns = st.session_state.turns
     user_turns = [t["content"] for t in turns if t["role"] == "user"]
@@ -179,7 +177,7 @@ def save_full_conversation():
         "system_r3": sys_turns[2] if len(sys_turns) > 2 else "",
     }
 
-    # Write to Google Sheets silently
+    # Google Sheets (silent)
     if MASTER_SHEET is not None:
         try:
             MASTER_SHEET.append_row([
@@ -196,7 +194,7 @@ def save_full_conversation():
         except:
             pass
 
-    # Also write to local CSV (silent)
+    # Local CSV (silent)
     csv_path = APP_DIR / "summary_logs.csv"
     header = not csv_path.exists()
     pd.DataFrame([row]).to_csv(csv_path, mode="a", index=False, header=header)
@@ -208,7 +206,6 @@ def log_event(role, content):
 
 # ---- UI ----
 st.subheader("Paste your text for a summary. You may ask for up to three revisions.")
-
 st.caption(f"Rounds remaining: {max(0, 3 - st.session_state.rounds_done)}")
 
 # Conversation history
@@ -234,13 +231,15 @@ else:
 
 # Handle new message
 if user_text:
+    st.session_state.just_finished = False
     log_event("user", user_text)
+
     reply = respond(user_text, temperature, max_tokens)
     log_event("assistant", reply)
 
     st.session_state.rounds_done += 1
 
-    if st.session_state.rounds_done == 3:
-        save_full_conversation()
+    # 🔁 Save after *every* round (1, 2, or 3)
+    save_full_conversation()
 
     st.rerun()
