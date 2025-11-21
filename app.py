@@ -3,23 +3,22 @@ import os, time, uuid, json
 import pandas as pd
 import streamlit as st
 from openai import OpenAI
-from dotenv import load_dotenv
 from pathlib import Path
 
 # --- Basic setup ---
 APP_DIR = Path(".")
-dotenv_path = APP_DIR / ".env"
-load_dotenv(dotenv_path=dotenv_path, override=True)
-
-os.environ["OPENAI_API_KEY"] = "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"
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 st.set_page_config(page_title="SummariesPro", page_icon="📝")
 st.title("SummariesPro Editing Tool")
-#st.caption("Paste the text you want summarized to receive a ~150-word summary. You can refine it through up to three rounds. If you’re satisfied with the first version, there’s no need to continue.")
+
+# --- API key handling: use Streamlit Secrets or environment variable ---
+OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY"))
 
 if not OPENAI_API_KEY:
-    st.error("Missing OPENAI_API_KEY in your .env file.")
+    st.error(
+        "OPENAI_API_KEY is not set. Please add it to Streamlit Secrets "
+        "(Manage app → Secrets) or as an environment variable."
+    )
     st.stop()
 
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -35,7 +34,6 @@ if "source_text" not in st.session_state:
     st.session_state.source_text = ""
 if "start_timestamp" not in st.session_state:
     st.session_state.start_timestamp = None  # timestamp of round 1
-
 
 # Generation parameters
 temperature = 0.4
@@ -100,10 +98,10 @@ def respond(user_text, temperature, max_tokens):
 
     system_with_round = (
         SYSTEM_INSTRUCTIONS
-        + f"\nCURRENT_ROUND: {current_round} of 3"
-        + "\n\nSOURCE_TEXT:\n" + source_text[:8000]
-        + "\n\nPREVIOUS_SUMMARY_IF_ANY:\n" + previous_summary[:4000]
-        + "\n\nUSER_FEEDBACK_THIS_ROUND:\n" + feedback[:3000]
+        + f"\\nCURRENT_ROUND: {current_round} of 3"
+        + "\\n\\nSOURCE_TEXT:\\n" + source_text[:8000]
+        + "\\n\\nPREVIOUS_SUMMARY_IF_ANY:\\n" + previous_summary[:4000]
+        + "\\n\\nUSER_FEEDBACK_THIS_ROUND:\\n" + feedback[:3000]
     )
 
     messages = [{"role": "system", "content": system_with_round}]
@@ -116,22 +114,15 @@ def respond(user_text, temperature, max_tokens):
     )
     messages.append({"role": "user", "content": user_message_content})
 
-    r = client.responses.create(
+    # Use Chat Completions for stability
+    r = client.chat.completions.create(
         model=MODEL,
-        input=messages,
+        messages=messages,
         temperature=temperature,
-        max_output_tokens=max_tokens,
-        store=False,
+        max_tokens=max_tokens,
     )
 
-    text = getattr(r, "output_text", None)
-    if not text:
-        try:
-            text = r.output[0].content[0].text
-        except:
-            text = ""
-
-    reply = (text or "").strip()
+    reply = (r.choices[0].message.content or "").strip()
 
     if current_round == 3 and reply.endswith("?"):
         reply = reply.rstrip(" ?") + "."
@@ -169,9 +160,10 @@ def save_full_conversation():
         "system_r3": system_r3,
     }
 
+    csv_path = APP_DIR / "summary_logs.csv"
+    header = not csv_path.exists()
     df = pd.DataFrame([row])
-    header = not os.path.exists("summary_logs.csv")
-    df.to_csv("summary_logs.csv", mode="a", index=False, header=header)
+    df.to_csv(csv_path, mode="a", index=False, header=header)
 
 
 def log_event(role, content):
@@ -185,8 +177,10 @@ rounds_left = max(0, 3 - st.session_state.rounds_done)
 st.caption(f"Rounds remaining: {rounds_left}")
 
 for t in st.session_state.turns:
-    with st.chat_message("user" if t["role"] == "user" else "assistant",
-                         avatar="👤" if t["role"] == "user" else "🤖"):
+    with st.chat_message(
+        "user" if t["role"] == "user" else "assistant",
+        avatar="👤" if t["role"] == "user" else "🤖"
+    ):
         st.markdown(t["content"])
 
 render_input = st.session_state.rounds_done < 3
@@ -207,7 +201,9 @@ textarea[aria-label="Your message"] {
     resize: none !important;
 }
 </style>
-            ''', unsafe_allow_html=True)
+            ''',
+            unsafe_allow_html=True,
+        )
 
         user_text_area = st.text_area("Your message", placeholder=placeholder, key="chat_draft")
         submitted = st.form_submit_button("Send")
