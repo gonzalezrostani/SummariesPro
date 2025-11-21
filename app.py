@@ -47,20 +47,21 @@ except Exception:
 
 st.sidebar.write("Secrets keys:", secret_keys)
 
-# Read nested service account block and SHEETS_ID safely
+# Read nested service account block safely
 if "gcp_service_account" in st.secrets:
-    # Make a plain dict for google-auth
     GCP_SA_INFO = dict(st.secrets["gcp_service_account"])
 else:
     GCP_SA_INFO = None
 
+# Read SHEETS_ID from root OR from inside gcp_service_account
+SHEETS_ID = None
 if "SHEETS_ID" in st.secrets:
     SHEETS_ID = st.secrets["SHEETS_ID"]
-else:
-    SHEETS_ID = None
+elif GCP_SA_INFO and "SHEETS_ID" in GCP_SA_INFO:
+    SHEETS_ID = GCP_SA_INFO["SHEETS_ID"]
 
 st.sidebar.write("Has gcp_service_account:", GCP_SA_INFO is not None)
-st.sidebar.write("Has SHEETS_ID:", SHEETS_ID is not None)
+st.sidebar.write("Has SHEETS_ID (effective):", SHEETS_ID is not None)
 
 @st.cache_resource(show_spinner=False)
 def get_master_sheet(gcp_info, sheet_id):
