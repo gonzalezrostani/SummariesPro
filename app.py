@@ -11,6 +11,7 @@ APP_DIR = Path(".")
 dotenv_path = APP_DIR / ".env"
 load_dotenv(dotenv_path=dotenv_path, override=True)
 
+os.environ["OPENAI_API_KEY"] = "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"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 st.set_page_config(page_title="SummariesPro", page_icon="📝")
