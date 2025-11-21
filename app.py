@@ -1,5 +1,5 @@
 
-import os, time, uuid, json
+import os, time, uuid
 import pandas as pd
 import streamlit as st
 from openai import OpenAI
@@ -38,27 +38,51 @@ except Exception as e:
     st.stop()
 
 # --- Google Sheets config for master log ---
-GCP_SA_INFO = st.secrets.get("gcp_service_account", None)
-SHEETS_ID = st.secrets.get("SHEETS_ID", None)
 
-def get_master_sheet():
-    if not GCP_SA_INFO or not SHEETS_ID:
+# Debug: show what keys exist in secrets
+try:
+    secret_keys = list(st.secrets.keys())
+except Exception:
+    secret_keys = []
+
+st.sidebar.write("Secrets keys:", secret_keys)
+
+# Read nested service account block and SHEETS_ID safely
+if "gcp_service_account" in st.secrets:
+    # Make a plain dict for google-auth
+    GCP_SA_INFO = dict(st.secrets["gcp_service_account"])
+else:
+    GCP_SA_INFO = None
+
+if "SHEETS_ID" in st.secrets:
+    SHEETS_ID = st.secrets["SHEETS_ID"]
+else:
+    SHEETS_ID = None
+
+st.sidebar.write("Has gcp_service_account:", GCP_SA_INFO is not None)
+st.sidebar.write("Has SHEETS_ID:", SHEETS_ID is not None)
+
+@st.cache_resource(show_spinner=False)
+def get_master_sheet(gcp_info, sheet_id):
+    if not gcp_info or not sheet_id:
         return None
     try:
         scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-        creds = Credentials.from_service_account_info(GCP_SA_INFO, scopes=scopes)
+        creds = Credentials.from_service_account_info(gcp_info, scopes=scopes)
         gs_client = gspread.authorize(creds)
-        # Use the first sheet (Sheet1) – change if you want a specific sheet
-        sh = gs_client.open_by_key(SHEETS_ID)
-        ws = sh.sheet1
+        sh = gs_client.open_by_key(sheet_id)
+        ws = sh.sheet1  # or sh.worksheet("Sheet1") if renamed
         return ws
     except Exception as e:
-        st.warning(f"Could not connect to Google Sheets for logging: {e}")
+        st.sidebar.warning(f"Could not connect to Google Sheets for logging: {e}")
         return None
 
-MASTER_SHEET = get_master_sheet()
+MASTER_SHEET = get_master_sheet(GCP_SA_INFO, SHEETS_ID)
+
 if MASTER_SHEET is None:
-    st.info("Google Sheets master log not configured; falling back to local CSV only.")
+    st.sidebar.warning("Master log: Google Sheets NOT configured; falling back to local CSV.")
+else:
+    st.sidebar.success("Master log: Google Sheets connected.")
 
 # ---- Session state ----
 if "conv_id" not in st.session_state:
@@ -71,6 +95,10 @@ if "source_text" not in st.session_state:
     st.session_state.source_text = ""
 if "start_timestamp" not in st.session_state:
     st.session_state.start_timestamp = None  # timestamp of round 1
+if "just_finished" not in st.session_state:
+    st.session_state.just_finished = False
+if "last_master_log_status" not in st.session_state:
+    st.session_state.last_master_log_status = None
 
 # Generation parameters
 temperature = 0.4
@@ -107,11 +135,11 @@ GENERAL
 MODEL = "gpt-4o-mini"
 
 
-def get_source_and_feedback(latest_user_text):
+def get_source_and_feedback(latest_user_text: str):
     return st.session_state.source_text or "", latest_user_text or ""
 
 
-def get_last_assistant_summary():
+def get_last_assistant_summary() -> str:
     for t in reversed(st.session_state.turns):
         if t["role"] == "assistant":
             return t["content"]
@@ -135,10 +163,10 @@ def respond(user_text, temperature, max_tokens):
 
     system_with_round = (
         SYSTEM_INSTRUCTIONS
-        + f"\\nCURRENT_ROUND: {current_round} of 3"
-        + "\\n\\nSOURCE_TEXT:\\n" + source_text[:8000]
-        + "\\n\\nPREVIOUS_SUMMARY_IF_ANY:\\n" + previous_summary[:4000]
-        + "\\n\\nUSER_FEEDBACK_THIS_ROUND:\\n" + feedback[:3000]
+        + f"\nCURRENT_ROUND: {current_round} of 3"
+        + "\n\nSOURCE_TEXT:\n" + source_text[:8000]
+        + "\n\nPREVIOUS_SUMMARY_IF_ANY:\n" + previous_summary[:4000]
+        + "\n\nUSER_FEEDBACK_THIS_ROUND:\n" + feedback[:3000]
     )
 
     messages = [{"role": "system", "content": system_with_round}]
@@ -211,8 +239,11 @@ def save_full_conversation():
                 row["user_r3"],
                 row["system_r3"],
             ])
+            st.session_state.last_master_log_status = "success"
         except Exception as e:
-            st.warning(f"Failed to append to Google Sheets master log: {e}")
+            st.session_state.last_master_log_status = f"error: {e}"
+    else:
+        st.session_state.last_master_log_status = "no_master_sheet"
 
     # --- 2) Append to local CSV as backup (ephemeral on Streamlit Cloud) ---
     csv_path = APP_DIR / "summary_logs.csv"
@@ -231,6 +262,7 @@ st.subheader("Paste your text for a summary. You may ask for up to three revisio
 rounds_left = max(0, 3 - st.session_state.rounds_done)
 st.caption(f"Rounds remaining: {rounds_left}")
 
+# Show conversation history
 for t in st.session_state.turns:
     with st.chat_message(
         "user" if t["role"] == "user" else "assistant",
@@ -268,17 +300,28 @@ else:
     user_text = None
     st.info("You have completed all 3 rounds. Refresh to start again.")
 
-
+# Handle new input
 if user_text:
+    st.session_state.just_finished = False
     log_event("user", user_text)
 
     reply = respond(user_text, temperature, max_tokens)
-
     log_event("assistant", reply)
 
     st.session_state.rounds_done += 1
 
     if st.session_state.rounds_done == 3:
         save_full_conversation()
+        st.session_state.just_finished = True
 
     st.rerun()
+
+# After rerun, show logging result once
+if st.session_state.just_finished and st.session_state.rounds_done == 3:
+    status = st.session_state.last_master_log_status
+    if status == "success":
+        st.success("Conversation saved to master Google Sheet.")
+    elif status == "no_master_sheet":
+        st.warning("Master Google Sheet not configured; only local CSV saved.")
+    elif status and status.startswith("error:"):
+        st.error(f"Error saving to master Google Sheet: {status}")
