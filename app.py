@@ -1,5 +1,5 @@
 
-import os, time, uuid
+import os, time, uuid, json
 import pandas as pd
 import streamlit as st
 from openai import OpenAI
@@ -47,24 +47,21 @@ except Exception:
 
 st.sidebar.write("Secrets keys:", secret_keys)
 
-# Read nested service account block safely
-if "gcp_service_account" in st.secrets:
-    GCP_SA_INFO = dict(st.secrets["gcp_service_account"])
+# Read service account JSON as a single string and parse it
+GCP_SERVICE_ACCOUNT_JSON = st.secrets.get("GCP_SERVICE_ACCOUNT_JSON", None)
+if GCP_SERVICE_ACCOUNT_JSON:
+    try:
+        GCP_SA_INFO = json.loads(GCP_SERVICE_ACCOUNT_JSON)
+    except Exception as e:
+        GCP_SA_INFO = None
+        st.sidebar.error(f"Failed to parse GCP_SERVICE_ACCOUNT_JSON: {e}")
 else:
     GCP_SA_INFO = None
 
-# Hardcoded default SHEETS_ID (your master log sheet)
-DEFAULT_SHEETS_ID = "1YaEF74iGERx78rwjSS_VtU8iLY4Dfa17do36tzTDX_Q"
+SHEETS_ID = st.secrets.get("SHEETS_ID", None)
 
-# Try to read SHEETS_ID from root or inside gcp_service_account, else use default
-SHEETS_ID = DEFAULT_SHEETS_ID
-if "SHEETS_ID" in st.secrets:
-    SHEETS_ID = st.secrets["SHEETS_ID"]
-elif GCP_SA_INFO and "SHEETS_ID" in GCP_SA_INFO:
-    SHEETS_ID = GCP_SA_INFO["SHEETS_ID"]
-
-st.sidebar.write("Has gcp_service_account:", GCP_SA_INFO is not None)
-st.sidebar.write("Effective SHEETS_ID:", SHEETS_ID)
+st.sidebar.write("Has parsed service account:", GCP_SA_INFO is not None)
+st.sidebar.write("SHEETS_ID:", SHEETS_ID)
 
 @st.cache_resource(show_spinner=False)
 def get_master_sheet(gcp_info, sheet_id):
