@@ -73,7 +73,7 @@ if "start_timestamp" not in st.session_state:
 
 # Generation parameters
 temperature = 0.4
-max_tokens = 350
+max_tokens = 170
 
 # ---- System instructions ----
 SYSTEM_INSTRUCTIONS = '''
