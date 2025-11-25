@@ -230,9 +230,10 @@ def log_event(role, content):
 
 # ---- UI ----
 st.markdown(
-    "<small>Feel free to use our AI tool. Just paste your text to get an initial summary — no prompt needed. You may request up to three revisions.</small>",
-    unsafe_allow_html=True,
+    "<p style='font-size:12px;'>Feel free to use our AI tool. Just paste your text to get an initial summary — no prompt needed. You may request up to three revisions.</p>",
+    unsafe_allow_html=True
 )
+
 st.caption(f"Rounds remaining: {max(0, 3 - st.session_state.rounds_done)}")
 
 # Conversation history
