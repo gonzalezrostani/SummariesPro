@@ -229,7 +229,7 @@ def log_event(role, content):
 
 
 # ---- UI ----
-st.subheader("Paste your text for a summary. You may ask for up to three revisions.")
+st.subheader("Feel free to use our AI tool. Just paste your text to get an initial summary — no prompt needed. You may request up to three revisions.")
 st.caption(f"Rounds remaining: {max(0, 3 - st.session_state.rounds_done)}")
 
 # Conversation history
