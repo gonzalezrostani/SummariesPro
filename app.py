@@ -187,6 +187,7 @@ def save_full_conversation():
         row["start_timestamp"],
         row["end_timestamp"],
         row["conversation_id"],
+        row["participant_id"],
         row["user_r1"],
         row["system_r1"],
         row["user_r2"],
