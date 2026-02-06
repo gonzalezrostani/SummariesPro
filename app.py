@@ -210,7 +210,7 @@ def save_full_conversation():
 
             if row_idx:
                 # Update row A..I for this index
-                MASTER_SHEET.update(f"A{row_idx}:I{row_idx}", [row_values])
+                MASTER_SHEET.update(f"A{row_idx}:J{row_idx}", [row_values])
             else:
                 MASTER_SHEET.append_row(row_values)
         except Exception:
