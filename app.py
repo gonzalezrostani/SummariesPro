@@ -174,6 +174,7 @@ def save_full_conversation():
         "start_timestamp": st.session_state.start_timestamp,
         "end_timestamp": int(time.time()),
         "conversation_id": st.session_state.conv_id,
+        "participant_id": st.session_state.get("participant_id", ""),
         "user_r1": user_turns[0] if len(user_turns) > 0 else "",
         "system_r1": sys_turns[0] if len(sys_turns) > 0 else "",
         "user_r2": user_turns[1] if len(user_turns) > 1 else "",
