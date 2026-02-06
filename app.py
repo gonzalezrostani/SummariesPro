@@ -71,6 +71,11 @@ if "source_text" not in st.session_state:
 if "start_timestamp" not in st.session_state:
     st.session_state.start_timestamp = None
 
+# Qualtrics example: https://summariespro.streamlit.app/?pid=${e://Field/workerId}
+qp = st.query_params
+if "participant_id" not in st.session_state:
+    st.session_state.participant_id = qp.get("rid", "")  # or "rid" if you used rid
+
 # Generation parameters
 temperature = 0.4
 max_tokens = 170
