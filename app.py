@@ -78,7 +78,7 @@ if "participant_id" not in st.session_state:
 
 # Generation parameters
 temperature = 0.4
-max_tokens = 240
+max_tokens = 500
 
 # ---- System instructions ----
 SYSTEM_INSTRUCTIONS = '''
