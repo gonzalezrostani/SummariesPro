@@ -237,7 +237,7 @@ def log_event(role, content):
 
 # ---- UI ----
 st.markdown(
-    "<p style='font-size:20px;'>Feel free to use our AI tool. Just paste your text to get an initial summary — no prompt needed. You may request up to three revisions.</p>",
+    "<p style='font-size:20px;'>How can I help you today?</p>",
     unsafe_allow_html=True
 )
 
