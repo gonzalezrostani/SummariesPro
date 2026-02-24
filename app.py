@@ -99,9 +99,9 @@ REQUIREMENTS
 - Stay faithful to the text.
 
 DIALOGUE ROUNDS
-Round 1 → produce first summary + ask a question.
-Round 2 → revise based on feedback + ask a question.
-Round 3 → finalize summary (NO question at end).
+Round 1 → produce first summary.
+Round 2 → revise based on feedback.
+Round 3 → finalize summary.
 
 GENERAL
 - Keep the labels exactly as written.
